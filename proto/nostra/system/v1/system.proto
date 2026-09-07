@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package nostra.system.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service SystemService {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+message PingRequest {
+  string message = 1;
+}
+
+message PingResponse {
+  string echo = 1;
+  google.protobuf.Timestamp server_time = 2;
+  google.protobuf.Timestamp db_time = 3;
+  int64 ping_count = 4;
+  string version = 5;
+}
