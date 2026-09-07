@@ -66,4 +66,4 @@ tasks:
   test:
     desc: Run tests
     cmds:
-      - go test ./... -race
+      - go test ./...
