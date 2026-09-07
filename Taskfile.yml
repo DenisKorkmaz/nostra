@@ -1,0 +1,69 @@
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  DATABASE_URL: postgres://{{.POSTGRES_USER}}:{{.POSTGRES_PASSWORD}}@localhost:{{.POSTGRES_PORT}}/{{.POSTGRES_DB}}?sslmode=disable
+  MIGRATIONS_DIR: db/migrations
+  COMPOSE: docker compose -f compose.dev.yaml
+
+tasks:
+  db:up:
+    desc: Start PostgreSQL
+    cmds:
+      - "{{.COMPOSE}} up -d"
+
+  db:down:
+    desc: Stop PostgreSQL
+    cmds:
+      - "{{.COMPOSE}} down"
+
+  db:reset:
+    desc: Recreate PostgreSQL from scratch
+    cmds:
+      - "{{.COMPOSE}} down -v"
+      - task: db:up
+
+  db:psql:
+    desc: Open psql
+    interactive: true
+    cmds:
+      - "{{.COMPOSE}} exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB"
+
+  migrate:up:
+    desc: Apply migrations
+    cmds:
+      - goose -dir {{.MIGRATIONS_DIR}} postgres "{{.DATABASE_URL}}" up
+
+  migrate:down:
+    desc: Roll back last migration
+    cmds:
+      - goose -dir {{.MIGRATIONS_DIR}} postgres "{{.DATABASE_URL}}" down
+
+  migrate:status:
+    desc: Show migration status
+    cmds:
+      - goose -dir {{.MIGRATIONS_DIR}} postgres "{{.DATABASE_URL}}" status
+
+  generate:
+    desc: Regenerate protobuf and database code
+    cmds:
+      - buf generate
+      - sqlc generate
+
+  run:
+    desc: Run the gateway
+    env:
+      NOSTRA_DATABASE_URL: "{{.DATABASE_URL}}"
+    cmds:
+      - go run ./cmd/gateway
+
+  build:
+    desc: Build all packages
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./... -race
