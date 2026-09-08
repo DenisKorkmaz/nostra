@@ -11,17 +11,17 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build \
     -trimpath \
     -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /out/gateway ./cmd/gateway
+    -o /out/nostra ./cmd/nostra
 
 RUN CGO_ENABLED=0 go install -tags "no_sqlite3 no_mssql no_clickhouse no_vertica no_ydb no_turso no_libsql" github.com/pressly/goose/v3/cmd/goose@v3.28.0
 
-FROM gcr.io/distroless/static-debian12:nonroot AS gateway
+FROM gcr.io/distroless/static-debian12:nonroot AS server
 
-COPY --from=build /out/gateway /gateway
+COPY --from=build /out/nostra /nostra
 
 USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/gateway"]
+ENTRYPOINT ["/nostra"]
 
 FROM gcr.io/distroless/static-debian12:nonroot AS migrate
 

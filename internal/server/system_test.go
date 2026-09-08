@@ -1,4 +1,4 @@
-package gateway_test
+package server_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	systemv1 "github.com/DenisKorkmaz/nostra/gen/nostra/system/v1"
-	"github.com/DenisKorkmaz/nostra/internal/gateway"
+	"github.com/DenisKorkmaz/nostra/internal/server"
 )
 
 // databaseURL is filled by TestMain and points at the throwaway container.
@@ -105,7 +105,7 @@ func newPool(t *testing.T) *pgxpool.Pool {
 func TestPingRecordsCallAndReportsDatabaseTime(t *testing.T) {
 
 	pool := newPool(t)
-	handler := gateway.NewSystemHandler(pool, "test-version")
+	handler := server.NewSystemHandler(pool, "test-version")
 
 	resp, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "hallo"}))
 	if err != nil {
@@ -139,7 +139,7 @@ func TestPingRecordsCallAndReportsDatabaseTime(t *testing.T) {
 func TestPingCountIncrementsPerCall(t *testing.T) {
 
 	pool := newPool(t)
-	handler := gateway.NewSystemHandler(pool, "test-version")
+	handler := server.NewSystemHandler(pool, "test-version")
 
 	for want := int64(1); want <= 3; want++ {
 		resp, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "x"}))
@@ -156,7 +156,7 @@ func TestPingCountIncrementsPerCall(t *testing.T) {
 func TestPingPersistsRow(t *testing.T) {
 
 	pool := newPool(t)
-	handler := gateway.NewSystemHandler(pool, "test-version")
+	handler := server.NewSystemHandler(pool, "test-version")
 
 	if _, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "persisted"})); err != nil {
 		t.Fatalf("ping: %v", err)

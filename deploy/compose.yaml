@@ -13,16 +13,16 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      gateway:
+      server:
         condition: service_started
     restart: unless-stopped
 
-  gateway:
-    image: ghcr.io/deniskorkmaz/nostra-gateway:${NOSTRA_VERSION:-latest}
+  server:
+    image: ghcr.io/deniskorkmaz/nostra-server:${NOSTRA_VERSION:-latest}
     build:
       context: ..
-      dockerfile: Dockerfile.gateway
-      target: gateway
+      dockerfile: Dockerfile.server
+      target: server
       args:
         VERSION: ${NOSTRA_VERSION:-dev}
     environment:
@@ -37,7 +37,7 @@ services:
     image: ghcr.io/deniskorkmaz/nostra-migrate:${NOSTRA_VERSION:-latest}
     build:
       context: ..
-      dockerfile: Dockerfile.gateway
+      dockerfile: Dockerfile.server
       target: migrate
     environment:
       GOOSE_DRIVER: postgres

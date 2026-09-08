@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DenisKorkmaz/nostra/internal/gateway"
 	"github.com/DenisKorkmaz/nostra/internal/platform/config"
 	"github.com/DenisKorkmaz/nostra/internal/platform/logging"
 	"github.com/DenisKorkmaz/nostra/internal/platform/postgres"
+	"github.com/DenisKorkmaz/nostra/internal/server"
 )
 
 var version = "dev"
@@ -22,7 +22,7 @@ const readHeaderTimeout = 10 * time.Second
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("gateway stopped with error", slog.String("error", err.Error()))
+		slog.Error("server stopped with error", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 }
@@ -46,14 +46,14 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           gateway.NewHandler(pool, logger, version),
+		Handler:           server.NewHandler(pool, logger, version),
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	serverErr := make(chan error, 1)
 
 	go func() {
-		logger.Info("gateway listening",
+		logger.Info("server listening",
 			slog.String("addr", cfg.HTTPAddr),
 			slog.String("env", cfg.Env),
 			slog.String("version", version),
@@ -78,7 +78,7 @@ func run() error {
 		return err
 	}
 
-	logger.Info("gateway stopped cleanly")
+	logger.Info("server stopped cleanly")
 
 	return nil
 }

@@ -1,10 +1,10 @@
 {$NOSTRA_DOMAIN} {
 	handle /nostra.* {
-		reverse_proxy h2c://gateway:8080
+		reverse_proxy h2c://server:8080
 	}
 
 	handle /healthz {
-		reverse_proxy gateway:8080
+		reverse_proxy server:8080
 	}
 
 	handle {

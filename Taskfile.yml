@@ -52,11 +52,11 @@ tasks:
       - sqlc generate
 
   run:
-    desc: Run the gateway
+    desc: Run the server
     env:
       NOSTRA_DATABASE_URL: "{{.DATABASE_URL}}"
     cmds:
-      - go run ./cmd/gateway
+      - go run ./cmd/nostra
 
   build:
     desc: Build all packages
