@@ -1,0 +1,70 @@
+services:
+  caddy:
+    image: ghcr.io/deniskorkmaz/nostra-web:${NOSTRA_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+    environment:
+      NOSTRA_DOMAIN: ${NOSTRA_DOMAIN:?set NOSTRA_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  gateway:
+    image: ghcr.io/deniskorkmaz/nostra-gateway:${NOSTRA_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile.gateway
+      target: gateway
+      args:
+        VERSION: ${NOSTRA_VERSION:-dev}
+    environment:
+      NOSTRA_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      NOSTRA_ENV: prod
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/deniskorkmaz/nostra-migrate:${NOSTRA_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile.gateway
+      target: migrate
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    command: ["up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
