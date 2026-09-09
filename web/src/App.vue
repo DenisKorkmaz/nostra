@@ -10,7 +10,7 @@ const client = createClient(SystemService, transport)
 const message = ref('hallo')
 const response = ref<PingResponse | null>(null)
 const error = ref<string | null>(null)
-const pending = ref(false)
+const pending = ref<number>(false)
 
 async function ping() {
   pending.value = true

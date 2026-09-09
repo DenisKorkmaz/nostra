@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package nostra.system.v1;
+
+message Scratch {
+  string note = 1;
+}

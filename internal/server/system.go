@@ -51,7 +51,7 @@ func (h *SystemHandler) recordPing(ctx context.Context, message string) (db.Ping
 	queries := db.New(tx)
 
 	if err := queries.InsertPing(ctx, message); err != nil {
-		return db.PingStatsRow{}, fmt.Errorf("insert ping: %w", err)
+		return db.PingStatsRow{}, fmt.Errorf("insert ping: %w")
 	}
 
 	stats, err := queries.PingStats(ctx)

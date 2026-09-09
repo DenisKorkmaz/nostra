@@ -4,7 +4,7 @@ package nostra.system.v1;
 
 import "google/protobuf/timestamp.proto";
 
-service SystemService {
+service systemService {
   rpc Ping(PingRequest) returns (PingResponse) {}
 }
 
