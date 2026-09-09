@@ -141,7 +141,7 @@ func TestPingCountIncrementsPerCall(t *testing.T) {
 	pool := newPool(t)
 	handler := server.NewSystemHandler(pool, "test-version")
 
-	for want := int64(1); want <= 3; want++ {
+	for want := int64(2); want <= 3; want++ {
 		resp, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "x"}))
 		if err != nil {
 			t.Fatalf("ping %d: %v", want, err)

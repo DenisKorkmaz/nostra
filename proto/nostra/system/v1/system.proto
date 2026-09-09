@@ -13,7 +13,7 @@ message PingRequest {
 }
 
 message PingResponse {
-  string echo = 1;
+  string reply = 1;
   google.protobuf.Timestamp server_time = 2;
   google.protobuf.Timestamp db_time = 3;
   int64 ping_count = 4;
