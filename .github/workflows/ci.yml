@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -128,7 +132,8 @@ jobs:
       contents: read
       packages: write
     outputs:
-      compose_sha256: ${{ steps.compose.outputs.sha256 }}
+      compose_sha256: ${{ steps.checksums.outputs.compose }}
+      script_sha256: ${{ steps.checksums.outputs.script }}
     strategy:
       matrix:
         include:
@@ -157,9 +162,13 @@ jobs:
           POSTGRES_DB: ci
         run: docker compose -f deploy/compose.yaml config --quiet
 
-      - name: Record compose file checksum
-        id: compose
-        run: echo "sha256=$(sha256sum <deploy/compose.yaml | cut -d' ' -f1)" >>"$GITHUB_OUTPUT"
+      - name: Record checksums of files deployed by hand
+        id: checksums
+        run: |
+          {
+            echo "compose=$(sha256sum <deploy/compose.yaml | cut -d' ' -f1)"
+            echo "script=$(sha256sum <deploy/remote-deploy.sh | cut -d' ' -f1)"
+          } >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
@@ -216,17 +225,27 @@ jobs:
         run: |
           echo "$GHCR_TOKEN" | ssh -o BatchMode=yes "deploy@$DEPLOY_HOST" "$GITHUB_SHA" | tee deploy.log
 
-      - name: Compare compose file with server
+      - name: Compare files deployed by hand with the server
         env:
-          EXPECTED: ${{ needs.build.outputs.compose_sha256 }}
+          EXPECTED_COMPOSE: ${{ needs.build.outputs.compose_sha256 }}
+          EXPECTED_SCRIPT: ${{ needs.build.outputs.script_sha256 }}
         run: |
-          actual=$(grep '^compose-sha256 ' deploy.log | cut -d' ' -f2)
-          if [ "$actual" != "$EXPECTED" ]; then
-            echo "compose.yaml on the server differs from the repository" >&2
-            echo "  repository: $EXPECTED" >&2
-            echo "  server:     $actual" >&2
-            exit 1
-          fi
+          check() {
+            actual=$(grep "^$1 " deploy.log | cut -d' ' -f2 || true)
+
+            if [ "$actual" != "$3" ]; then
+              echo "$2 on the server differs from the repository" >&2
+              echo "  repository: $3" >&2
+              echo "  server:     ${actual:-<no output>}" >&2
+              return 1
+            fi
+          }
+
+          drift=0
+          check compose-sha256 deploy/compose.yaml "$EXPECTED_COMPOSE" || drift=1
+          check script-sha256 deploy/remote-deploy.sh "$EXPECTED_SCRIPT" || drift=1
+
+          exit "$drift"
 
       - name: Smoke test
         env:
