@@ -41,7 +41,10 @@ docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
 
 NOSTRA_VERSION="$sha" docker compose pull server migrate caddy
 
-sed -i "s|^NOSTRA_VERSION=.*|NOSTRA_VERSION=$sha|" .env
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+sed "s|^NOSTRA_VERSION=.*|NOSTRA_VERSION=$sha|" .env >"$tmp"
+cat "$tmp" >.env
 
 docker compose up -d --no-build --remove-orphans
 
@@ -52,3 +55,4 @@ docker image prune -af --filter "until=$PRUNE_AGE" >/dev/null
 logger -t nostra-deploy "deployed $sha"
 
 printf 'compose-sha256 %s\n' "$(sha256sum <compose.yaml | cut -d' ' -f1)"
+printf 'script-sha256 %s\n' "$(sha256sum <"$0" | cut -d' ' -f1)"
