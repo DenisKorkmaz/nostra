@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   BUF_VERSION: "1.72.0"
@@ -19,6 +19,8 @@ env:
   NODE_VERSION: "24"
   ACTIONLINT_VERSION: "v1.7.12"
   ZIZMOR_VERSION: "1.30.1"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/deniskorkmaz
 
 jobs:
   go:
@@ -117,3 +119,138 @@ jobs:
           version: ${{ env.ZIZMOR_VERSION }}
           advanced-security: false
           annotations: true
+
+  build:
+    needs: [go, proto, web, generate, workflows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      compose_sha256: ${{ steps.compose.outputs.sha256 }}
+    strategy:
+      matrix:
+        include:
+          - image: nostra-server
+            dockerfile: Dockerfile.server
+            target: server
+            build_args: VERSION=${{ github.sha }}
+          - image: nostra-migrate
+            dockerfile: Dockerfile.server
+            target: migrate
+            build_args: ""
+          - image: nostra-web
+            dockerfile: Dockerfile.web
+            target: ""
+            build_args: VERSION=${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate compose file
+        env:
+          NOSTRA_DOMAIN: example.invalid
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        run: docker compose -f deploy/compose.yaml config --quiet
+
+      - name: Record compose file checksum
+        id: compose
+        run: echo "sha256=$(sha256sum <deploy/compose.yaml | cut -d' ' -f1)" >>"$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build_args }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    environment:
+      name: production
+      url: https://${{ vars.NOSTRA_DOMAIN }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          echo "$GHCR_TOKEN" | ssh -o BatchMode=yes "deploy@$DEPLOY_HOST" "$GITHUB_SHA" | tee deploy.log
+
+      - name: Compare compose file with server
+        env:
+          EXPECTED: ${{ needs.build.outputs.compose_sha256 }}
+        run: |
+          actual=$(grep '^compose-sha256 ' deploy.log | cut -d' ' -f2)
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "compose.yaml on the server differs from the repository" >&2
+            echo "  repository: $EXPECTED" >&2
+            echo "  server:     $actual" >&2
+            exit 1
+          fi
+
+      - name: Smoke test
+        env:
+          NOSTRA_DOMAIN: ${{ vars.NOSTRA_DOMAIN }}
+        run: |
+          endpoint="https://$NOSTRA_DOMAIN/nostra.system.v1.SystemService/Ping"
+          version=""
+
+          for _ in $(seq 1 30); do
+            version=$(curl -fsS -X POST "$endpoint" \
+              -H 'Content-Type: application/json' \
+              -d '{"message":"deploy"}' | jq -r '.version' || true)
+            [ "$version" = "$GITHUB_SHA" ] && break
+            sleep 3
+          done
+
+          if [ "$version" != "$GITHUB_SHA" ]; then
+            echo "server reports version '$version', expected '$GITHUB_SHA'" >&2
+            exit 1
+          fi
+
+          web_version=$(curl -fsS "https://$NOSTRA_DOMAIN/version.txt")
+
+          if [ "$web_version" != "$GITHUB_SHA" ]; then
+            echo "frontend reports version '$web_version', expected '$GITHUB_SHA'" >&2
+            exit 1
+          fi
