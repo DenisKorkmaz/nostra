@@ -230,20 +230,20 @@ jobs:
           EXPECTED_COMPOSE: ${{ needs.build.outputs.compose_sha256 }}
           EXPECTED_SCRIPT: ${{ needs.build.outputs.script_sha256 }}
         run: |
-          drift=0
-
-          for pair in "compose-sha256 deploy/compose.yaml $EXPECTED_COMPOSE" \
-                      "script-sha256 deploy/remote-deploy.sh $EXPECTED_SCRIPT"; do
-            set -- $pair
+          check() {
             actual=$(grep "^$1 " deploy.log | cut -d' ' -f2 || true)
 
             if [ "$actual" != "$3" ]; then
               echo "$2 on the server differs from the repository" >&2
               echo "  repository: $3" >&2
               echo "  server:     ${actual:-<no output>}" >&2
-              drift=1
+              return 1
             fi
-          done
+          }
+
+          drift=0
+          check compose-sha256 deploy/compose.yaml "$EXPECTED_COMPOSE" || drift=1
+          check script-sha256 deploy/remote-deploy.sh "$EXPECTED_SCRIPT" || drift=1
 
           exit "$drift"
 
