@@ -1,4 +1,4 @@
-package server_test
+package system_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	systemv1 "github.com/DenisKorkmaz/nostra/gen/nostra/system/v1"
-	"github.com/DenisKorkmaz/nostra/internal/server"
+	"github.com/DenisKorkmaz/nostra/internal/system"
 )
 
 // databaseURL is filled by TestMain and points at the throwaway container.
@@ -105,9 +105,9 @@ func newPool(t *testing.T) *pgxpool.Pool {
 func TestPingRecordsCallAndReportsDatabaseTime(t *testing.T) {
 
 	pool := newPool(t)
-	handler := server.NewSystemHandler(pool, "test-version")
+	service := system.New(pool, "test-version")
 
-	resp, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "hallo"}))
+	resp, err := service.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "hallo"}))
 	if err != nil {
 		t.Fatalf("ping: %v", err)
 	}
@@ -139,10 +139,10 @@ func TestPingRecordsCallAndReportsDatabaseTime(t *testing.T) {
 func TestPingCountIncrementsPerCall(t *testing.T) {
 
 	pool := newPool(t)
-	handler := server.NewSystemHandler(pool, "test-version")
+	service := system.New(pool, "test-version")
 
 	for want := int64(1); want <= 3; want++ {
-		resp, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "x"}))
+		resp, err := service.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "x"}))
 		if err != nil {
 			t.Fatalf("ping %d: %v", want, err)
 		}
@@ -156,9 +156,9 @@ func TestPingCountIncrementsPerCall(t *testing.T) {
 func TestPingPersistsRow(t *testing.T) {
 
 	pool := newPool(t)
-	handler := server.NewSystemHandler(pool, "test-version")
+	service := system.New(pool, "test-version")
 
-	if _, err := handler.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "persisted"})); err != nil {
+	if _, err := service.Ping(t.Context(), connect.NewRequest(&systemv1.PingRequest{Message: "persisted"})); err != nil {
 		t.Fatalf("ping: %v", err)
 	}
 
