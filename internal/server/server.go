@@ -14,6 +14,7 @@ import (
 
 	"github.com/DenisKorkmaz/nostra/gen/nostra/system/v1/systemv1connect"
 	"github.com/DenisKorkmaz/nostra/internal/platform/interceptor"
+	"github.com/DenisKorkmaz/nostra/internal/system"
 )
 
 const readyTimeout = 2 * time.Second
@@ -22,7 +23,7 @@ func NewHandler(pool *pgxpool.Pool, logger *slog.Logger, version string) http.Ha
 	mux := http.NewServeMux()
 
 	path, handler := systemv1connect.NewSystemServiceHandler(
-		NewSystemHandler(pool, version),
+		system.New(pool, version),
 		connect.WithInterceptors(
 			interceptor.NewRequestID(),
 			interceptor.NewLogging(logger),

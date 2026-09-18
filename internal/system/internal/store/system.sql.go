@@ -3,7 +3,7 @@
 //   sqlc v1.31.1
 // source: system.sql
 
-package db
+package store
 
 import (
 	"context"
